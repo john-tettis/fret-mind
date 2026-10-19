@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Fretboard } from './components/Fretboard';
 import { ProgressionTimeline } from './components/ProgressionTimeline';
@@ -18,14 +17,20 @@ const MainApp: React.FC = () => {
       runAiAnalysis();
     }
 
-    const handleFirstClick = () => {
-      audioEngine.initAudio();
-      window.removeEventListener('click', handleFirstClick);
+    const handleFirstGesture = () => {
+      audioEngine.initAudio().catch(() => {});
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+      window.removeEventListener('touchstart', handleFirstGesture);
     };
-    window.addEventListener('click', handleFirstClick);
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+    window.addEventListener('keydown', handleFirstGesture, { once: true });
+    window.addEventListener('touchstart', handleFirstGesture, { once: true });
 
     return () => {
-      window.removeEventListener('click', handleFirstClick);
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+      window.removeEventListener('touchstart', handleFirstGesture);
     };
   }, []);
 
@@ -71,12 +76,5 @@ const MainApp: React.FC = () => {
 };
 
 export default function App() {
-  return (
-    <BrowserRouter basename="/fretmind">
-      <Routes>
-        <Route path="/" element={<MainApp />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+  return <MainApp />;
 }
