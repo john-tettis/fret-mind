@@ -4,98 +4,74 @@
 
 @layer base {
   :root {
-    --bg-main: #0c0a08;
-    --bg-card: #14110e;
-    --bg-subtle: #1c1814;
-    --border-main: #2b241e;
-    --border-highlight: #473a2f;
-    --amber-warm: #d97706;
+    --bg-main: #111113;
+    --bg-card: #18181b;
+    --bg-subtle: #202024;
+    --border-main: #27272c;
+    --border-highlight: #3f3f46;
+    --amber-warm: #d49a3d;
     --amber-bright: #f59e0b;
-    --text-primary: #ede5d8;
-    --text-muted: #9e8e7e;
+    --text-primary: #f2f2f4;
+    --text-muted: #9c9ca4;
   }
 
   body {
-    background-color: #0c0a08;
-    color: #ede5d8;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background-color: #111113;
+    color: #edeef0;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
   }
 }
 
-/* Custom Artisan Scrollbars */
+/* Subtle, unobtrusive scrollbars */
 ::-webkit-scrollbar {
-  height: 7px;
-  width: 7px;
+  height: 6px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #110e0c;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #302821;
-  border-radius: 4px;
-  border: 1px solid #1f1a15;
+  background: #2a2a30;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a3e33;
+  background: #3f3f48;
 }
 
-/* Authentic Dark Rosewood / Ebony Fretboard */
+/* Calm, natural dark fretboard */
 .fretboard-wood {
-  background: linear-gradient(180deg, #1b1612 0%, #110e0b 50%, #191410 100%);
-  box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.9), inset 0 -3px 12px rgba(0, 0, 0, 0.9);
+  background: #171514;
+  background: linear-gradient(180deg, #191716 0%, #141211 100%);
 }
 
-/* Silver-Nickel Fretwire specularity */
+/* Clean, low-glare fretwire */
 .fret-wire {
-  border-right: 1px solid #635b54;
-  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.12), -1px 0 0 rgba(0, 0, 0, 0.85);
+  border-right: 1px solid #3d3b3a;
 }
 
-/* Bone nut styling */
+/* Natural bone nut */
 .fret-nut {
-  border-right: 4px solid #e3dac9;
-  background: linear-gradient(90deg, #181512 0%, #29241f 100%);
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.7);
+  border-right: 3px solid #d5cec2;
+  background: #1c1a18;
 }
 
-/* Mother-of-Pearl Inlays */
+/* Soft fretboard inlays */
 .pearl-inlay {
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #dcd6cd 50%, #a8a096 100%);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #4a4642;
+  opacity: 0.65;
 }
 
-/* Active Finger Dots (Aged Amber Tortoiseshell / Brass) */
-@keyframes warm-tube-glow {
-  0%, 100% {
-    box-shadow: 0 0 12px rgba(217, 119, 6, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.8), inset 0 1px 4px rgba(255, 255, 255, 0.9);
-  }
-}
-
-.glow-active-fret {
-  animation: warm-tube-glow 2.4s infinite ease-in-out;
-}
-
-/* Studio Gear Bezel & Panel Borders */
-.studio-panel {
-  background-color: #14110e;
-  border: 1px solid #2b241e;
-  border-radius: 1rem;
-}
-
-.studio-panel-inset {
-  background-color: #0d0b09;
-  border: 1px solid #241e19;
+/* Calm active fret dots - soft warm gold without harsh blinking or heavy pulsing */
+.active-fret-dot {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.4);
 }

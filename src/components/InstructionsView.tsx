@@ -15,16 +15,15 @@ export const InstructionsView: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-10 animate-in fade-in duration-200">
       {/* Header Banner */}
-      <div className="border border-[#383129] bg-gradient-to-b from-[#1c1814] to-[#14110e] rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="border border-[#27272c] bg-[#18181b] rounded-xl p-6 sm:p-7 shadow-lg relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#29221a] border border-[#4a3d2e] text-[#d4af37] text-xs font-mono font-bold tracking-wider uppercase">
+            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-[#222227] text-amber-300 text-xs font-mono font-medium">
               <Compass className="w-3.5 h-3.5" />
-              <span>Studio Field Manual • v2.0</span>
+              <span>Studio Guide</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-[#f5ede0] tracking-tight font-serif m-0">
-              Mastering the FretMind Studio
+            <h2 className="text-xl sm:text-2xl font-bold text-[#f2f2f4] tracking-tight m-0">
+              FretMind Studio Guide
             </h2>
             <p className="text-sm text-[#b8a998] max-w-2xl leading-relaxed m-0">
               An interactive visual environment for guitarists, songwriters, and producers to explore

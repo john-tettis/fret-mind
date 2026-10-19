@@ -35,7 +35,7 @@ const MainApp: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0c0a08] text-[#ede5d8] flex flex-col font-sans select-none">
+    <div className="min-h-screen bg-[#111113] text-[#edeef0] flex flex-col font-sans select-none">
       {/* Top Studio Navbar */}
       <Navbar />
 
@@ -46,7 +46,7 @@ const MainApp: React.FC = () => {
       ) : (
         <>
           {/* Sticky Guitar Fretboard Neck */}
-          <div className="sticky top-0 z-30 bg-[#0c0a08]/95 backdrop-blur-md border-b border-[#28221c] shadow-2xl px-2 sm:px-4 py-2">
+          <div className="sticky top-0 z-30 bg-[#111113]/95 backdrop-blur-md border-b border-[#232328] shadow-md px-2 sm:px-4 py-2">
             <div className="max-w-[1700px] w-full mx-auto">
               <Fretboard />
             </div>

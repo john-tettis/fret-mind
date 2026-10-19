@@ -46,7 +46,7 @@ export const MiniFretboard: React.FC<MiniFretboardProps> = ({
 
   return (
     <div
-      className={`inline-flex flex-col items-center bg-[#0d0b09] p-2 rounded-xl border border-[#2b241e] shadow-inner select-none ${className}`}
+      className={`inline-flex flex-col items-center bg-[#131316] p-1.5 rounded-lg border border-[#222227] select-none ${className}`}
     >
       <svg width={width} height={height} className="select-none overflow-visible">
         {/* Fret Position Badge if not open position */}

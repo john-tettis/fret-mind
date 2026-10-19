@@ -179,9 +179,9 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-[#14110e] border border-[#2e261f] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+      <div className="bg-[#18181b] border border-[#27272c] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-[#28211a] flex items-center justify-between bg-[#100d0a]">
+        <div className="p-4 sm:p-5 border-b border-[#242429] flex items-center justify-between bg-[#141417]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-[#261f18] text-amber-400 border border-[#3d3126]">
               <Bookmark className="w-5 h-5" />

@@ -68,7 +68,7 @@ export const ApiKeyModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-[#14110e] border border-[#2e261f] rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-[#ede5d8] max-h-[90vh] overflow-y-auto"
+        className="bg-[#18181b] border border-[#27272c] rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-[#edeef0] max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
