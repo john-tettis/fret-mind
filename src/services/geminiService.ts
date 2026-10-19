@@ -5,14 +5,17 @@ import { Note } from '@tonaljs/tonal';
 
 // Prioritized list of active Gemini models (2026)
 export const CANDIDATE_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
   'gemini-2.0-flash',
-  'gemini-flash-latest',
-  'gemini-2.0-flash-001',
+  'gemini-1.5-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash-exp',
+  'gemini-2.5-pro',
+  'gemini-1.5-pro',
 ];
 
-let cachedWorkingModel: string | null = null;
+const WORKING_MODEL_KEY = 'fretmind_gemini_working_model';
+let cachedWorkingModel: string | null =
+  typeof window !== 'undefined' ? localStorage.getItem(WORKING_MODEL_KEY) : null;
 
 export type ExplorationStyle = 'auto' | 'modal' | 'jazz' | 'rock' | 'diatonic';
 
@@ -281,8 +284,10 @@ Return your response strictly as a JSON object matching this schema:
     required: ['potentialKeys', 'decidingChords', 'nextChordSuggestions'],
   };
 
+  const discovered = cachedWorkingModel ? [] : await discoverAvailableModels(ai);
   const modelsToTry = [
     ...(cachedWorkingModel ? [cachedWorkingModel] : []),
+    ...discovered,
     ...CANDIDATE_MODELS,
   ];
   const uniqueModels = [...new Set(modelsToTry)];
@@ -338,6 +343,9 @@ Return your response strictly as a JSON object matching this schema:
 
       const parsed = JSON.parse(cleanedJson) as AiAnalysisResult;
       cachedWorkingModel = workingModelUsed;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(WORKING_MODEL_KEY, workingModelUsed);
+      }
 
       parsed.analyzedAt = new Date().toLocaleTimeString();
       parsed.source = 'gemini';

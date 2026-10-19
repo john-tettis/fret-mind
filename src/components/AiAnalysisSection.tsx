@@ -18,11 +18,14 @@ export const AiAnalysisSection: React.FC = () => {
     apiKey,
     aiAnalysis,
     isAnalyzing,
+    analysisError,
     harmonicStyle,
     setHarmonicStyle,
     runAiAnalysis,
     addChordToProgression,
     applyVoicingToFretboard,
+    detectedChord,
+    addCurrentToProgression,
   } = useStore();
 
   const [highlightedChord, setHighlightedChord] = useState<string | null>(null);
@@ -140,14 +143,46 @@ export const AiAnalysisSection: React.FC = () => {
       {/* 2. CONTENT AREA */}
       <div className="pt-3">
         {progression.length === 0 ? (
-          /* Clean empty standby state */
-          <div className="w-full text-center py-6 px-4 rounded-xl border border-dashed border-[#2b2b32] bg-[#141417]/50">
+          /* Clean empty standby state with quick-add helper */
+          <div className="w-full text-center py-6 px-4 rounded-xl border border-dashed border-[#2b2b32] bg-[#141417]/50 space-y-2.5">
             <p className="text-xs text-[#8e8e96] m-0">
               Add chords to your timeline to get intelligent harmonic recommendations and next chord suggestions.
             </p>
+            {detectedChord && detectedChord.notes.length > 0 && (
+              <div className="pt-1">
+                <button
+                  onClick={addCurrentToProgression}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold shadow-sm transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Analyze current chord: {detectedChord.name}</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Active Analysis Loading Spinner */}
+            {isAnalyzing && (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-[#a4a4b0] bg-[#141417] rounded-lg border border-[#242428] animate-pulse">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <span>Analyzing harmonic movement and voice leading...</span>
+              </div>
+            )}
+
+            {/* Error Notice with Fallback Option */}
+            {analysisError && !isAnalyzing && (
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-center justify-between gap-2">
+                <span className="truncate">{analysisError}</span>
+                <button
+                  onClick={() => runAiAnalysis(true)}
+                  className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-medium text-[11px] shrink-0"
+                >
+                  Use Theory Engine
+                </button>
+              </div>
+            )}
+
             {/* Harmonic Narrative Overview */}
             {aiAnalysis?.overviewExplanation && (
               <div className="p-3 rounded-lg bg-[#141417] border border-[#242428] text-xs text-[#c8c8cf] leading-relaxed">
