@@ -1,5 +1,5 @@
-import { Chord, Note } from '@tonaljs/tonal';
-import type { DetectedChordInfo } from '../types';
+import { Chord, Note, Key } from '@tonaljs/tonal';
+import type { DetectedChordInfo, DetectedKeyCandidate, VoicingOption, ChordItem } from '../types';
 
 export interface GuitarStringConfig {
   index: number; // 0 to 5 (0 = 6th string low E, 5 = 1st string high E)
@@ -353,3 +353,323 @@ export const PRESET_PROGRESSIONS: PresetProgression[] = [
     ],
   },
 ];
+
+/**
+ * Normalizes chromatic pitch class to standard 12-TET sharps
+ */
+function normalizePitchClass(pc: string): string {
+  const enharmonics: Record<string, string> = {
+    Db: 'C#',
+    Eb: 'D#',
+    Gb: 'F#',
+    Ab: 'G#',
+    Bb: 'A#',
+  };
+  return enharmonics[pc] || pc;
+}
+
+/**
+ * Returns lowest fret on a guitar string for a given pitch class
+ */
+export function getFretForNoteOnString(stringIdx: number, pitchClass: string): number | null {
+  const stringRoots = ['E', 'A', 'D', 'G', 'B', 'E'];
+  const chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const target = normalizePitchClass(pitchClass);
+  const sRoot = normalizePitchClass(stringRoots[stringIdx] || 'E');
+  const targetIdx = chromatic.indexOf(target);
+  const sIdx = chromatic.indexOf(sRoot);
+  if (targetIdx === -1 || sIdx === -1) return null;
+  return (targetIdx - sIdx + 12) % 12;
+}
+
+/**
+ * Intelligent Dynamic Key Detector:
+ * Evaluates chord progressions against diatonic major, natural minor, harmonic minor,
+ * and modal scales to determine most likely musical keys with confidence scores.
+ */
+export function detectLikelyKeys(
+  chordItemsOrNames: (ChordItem | string)[]
+): DetectedKeyCandidate[] {
+  if (!chordItemsOrNames || chordItemsOrNames.length === 0) return [];
+
+  const rawNames = chordItemsOrNames.map((item) =>
+    typeof item === 'string' ? item : item.name
+  );
+
+  const cleanChords = rawNames
+    .map((c) =>
+      c
+        .replace(/\/.*$/, '')
+        .replace(/\(.*\)/, '')
+        .replace(/major/i, '')
+        .replace(/minor/i, 'm')
+        .replace(/maj/i, 'M')
+        .trim()
+    )
+    .filter(Boolean);
+
+  if (cleanChords.length === 0) return [];
+
+  const tonics = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+  const candidates: DetectedKeyCandidate[] = [];
+
+  for (const t of tonics) {
+    // 1. Evaluate Major Key (Ionian)
+    const maj = Key.majorKey(t);
+    let majScore = 0;
+    const majTriads = maj.triads;
+    const majChords = maj.chords;
+
+    cleanChords.forEach((c, idx) => {
+      const isTriad = majTriads.some((triad) => c === triad || c.startsWith(triad));
+      const is7th = majChords.some((ch) => c === ch);
+      if (isTriad || is7th) {
+        majScore += 26;
+      } else if (maj.scale.some((note) => c.startsWith(note))) {
+        majScore += 6;
+      } else {
+        majScore -= 12;
+      }
+
+      // First or last chord tonic bonus
+      if ((idx === 0 || idx === cleanChords.length - 1) && (c === t || c.startsWith(t))) {
+        majScore += 16;
+      }
+    });
+
+    const majConfidence = Math.max(
+      15,
+      Math.min(99, Math.round((majScore / (cleanChords.length * 28)) * 82 + 15))
+    );
+
+    candidates.push({
+      key: `${t} Major`,
+      confidence: majConfidence,
+      scaleType: 'major',
+      modeName: 'Ionian',
+      reason: `Matches ${t} Major scale notes (${maj.scale.join(', ')})`,
+    });
+
+    // 2. Evaluate Minor Key (Aeolian / Harmonic)
+    const min = Key.minorKey(t);
+    let minScore = 0;
+    const minTriads = min.natural.triads;
+    const minHarmonicTriads = min.harmonic.triads;
+
+    cleanChords.forEach((c, idx) => {
+      const isNatTriad = minTriads.some((triad) => c === triad || c.startsWith(triad));
+      const isHarmTriad = minHarmonicTriads.some((triad) => c === triad || c.startsWith(triad));
+
+      if (isNatTriad || isHarmTriad) {
+        minScore += 26;
+      } else if (min.natural.scale.some((note) => c.startsWith(note))) {
+        minScore += 6;
+      } else {
+        minScore -= 12;
+      }
+
+      if ((idx === 0 || idx === cleanChords.length - 1) && (c.startsWith(`${t}m`) || c === `${t}m`)) {
+        minScore += 16;
+      }
+    });
+
+    const minConfidence = Math.max(
+      15,
+      Math.min(99, Math.round((minScore / (cleanChords.length * 28)) * 82 + 15))
+    );
+
+    candidates.push({
+      key: `${t} Minor`,
+      confidence: minConfidence,
+      scaleType: 'minor',
+      modeName: 'Aeolian',
+      reason: `Matches ${t} Natural Minor scale notes (${min.natural.scale.join(', ')})`,
+    });
+  }
+
+  // Sort descending by confidence
+  candidates.sort((a, b) => b.confidence - a.confidence);
+
+  // Return top unique 3
+  const seen = new Set<string>();
+  const topCandidates: DetectedKeyCandidate[] = [];
+  for (const cand of candidates) {
+    if (!seen.has(cand.key)) {
+      seen.add(cand.key);
+      topCandidates.push(cand);
+      if (topCandidates.length >= 3) break;
+    }
+  }
+
+  return topCandidates;
+}
+
+/**
+ * Standard open chord library for immediate familiar acoustic voicings
+ */
+const KNOWN_OPEN_VOICINGS: Record<string, { frets: (number | null)[]; shapeName: string }[]> = {
+  C: [{ frets: [null, 3, 2, 0, 1, 0], shapeName: 'Open Position' }],
+  Cmaj: [{ frets: [null, 3, 2, 0, 1, 0], shapeName: 'Open Position' }],
+  Cmaj7: [{ frets: [null, 3, 2, 0, 0, 0], shapeName: 'Open Position' }],
+  C7: [{ frets: [null, 3, 2, 3, 1, 0], shapeName: 'Open Position' }],
+  Cadd9: [{ frets: [null, 3, 2, 0, 3, 0], shapeName: 'Open Position (Acoustic)' }],
+  Csus4: [{ frets: [null, 3, 3, 0, 1, 1], shapeName: 'Open Position' }],
+  Cm: [{ frets: [null, 3, 5, 5, 4, 3], shapeName: 'Root-5 Barre' }],
+  Cm7: [{ frets: [null, 3, 5, 3, 4, 3], shapeName: 'Root-5 Barre' }],
+
+  G: [{ frets: [3, 2, 0, 0, 0, 3], shapeName: 'Open Position' }],
+  Gmaj: [{ frets: [3, 2, 0, 0, 0, 3], shapeName: 'Open Position' }],
+  G7: [{ frets: [3, 2, 0, 0, 0, 1], shapeName: 'Open Position' }],
+  Gmaj7: [{ frets: [3, 2, 0, 0, 0, 2], shapeName: 'Open Position' }],
+  Gm: [{ frets: [3, 5, 5, 3, 3, 3], shapeName: 'Root-6 Barre' }],
+  Gm7: [{ frets: [3, 5, 3, 3, 3, 3], shapeName: 'Root-6 Barre' }],
+
+  D: [{ frets: [null, null, 0, 2, 3, 2], shapeName: 'Open Position' }],
+  Dmaj: [{ frets: [null, null, 0, 2, 3, 2], shapeName: 'Open Position' }],
+  Dm: [{ frets: [null, null, 0, 2, 3, 1], shapeName: 'Open Position' }],
+  D7: [{ frets: [null, null, 0, 2, 1, 2], shapeName: 'Open Position' }],
+  Dmaj7: [{ frets: [null, null, 0, 2, 2, 2], shapeName: 'Open Position' }],
+  Dm7: [{ frets: [null, null, 0, 2, 1, 1], shapeName: 'Open Position' }],
+  Dsus4: [{ frets: [null, null, 0, 2, 3, 3], shapeName: 'Open Position' }],
+
+  A: [{ frets: [null, 0, 2, 2, 2, 0], shapeName: 'Open Position' }],
+  Amaj: [{ frets: [null, 0, 2, 2, 2, 0], shapeName: 'Open Position' }],
+  Am: [{ frets: [null, 0, 2, 2, 1, 0], shapeName: 'Open Position' }],
+  A7: [{ frets: [null, 0, 2, 0, 2, 0], shapeName: 'Open Position' }],
+  Am7: [{ frets: [null, 0, 2, 0, 1, 0], shapeName: 'Open Position' }],
+  Amaj7: [{ frets: [null, 0, 2, 1, 2, 0], shapeName: 'Open Position' }],
+  Asus4: [{ frets: [null, 0, 2, 2, 3, 0], shapeName: 'Open Position' }],
+
+  E: [{ frets: [0, 2, 2, 1, 0, 0], shapeName: 'Open Position' }],
+  Emaj: [{ frets: [0, 2, 2, 1, 0, 0], shapeName: 'Open Position' }],
+  Em: [{ frets: [0, 2, 2, 0, 0, 0], shapeName: 'Open Position' }],
+  E7: [{ frets: [0, 2, 0, 1, 0, 0], shapeName: 'Open Position' }],
+  Em7: [{ frets: [0, 2, 2, 0, 3, 0], shapeName: 'Open Position' }],
+  Emaj7: [{ frets: [0, 2, 1, 1, 0, 0], shapeName: 'Open Position' }],
+  Esus4: [{ frets: [0, 2, 2, 2, 0, 0], shapeName: 'Open Position' }],
+
+  F: [{ frets: [1, 3, 3, 2, 1, 1], shapeName: 'Root-6 Barre' }, { frets: [null, null, 3, 2, 1, 1], shapeName: 'Small Barre' }],
+  Fmaj7: [{ frets: [null, null, 3, 2, 1, 0], shapeName: 'Open Top Shape' }, { frets: [1, null, 2, 2, 1, null], shapeName: 'Root-6 Jazzy' }],
+  Fm: [{ frets: [1, 3, 3, 1, 1, 1], shapeName: 'Root-6 Barre' }],
+  Fm7: [{ frets: [1, 3, 1, 1, 1, 1], shapeName: 'Root-6 Barre' }],
+
+  B: [{ frets: [null, 2, 4, 4, 4, 2], shapeName: 'Root-5 Barre' }],
+  Bm: [{ frets: [null, 2, 4, 4, 3, 2], shapeName: 'Root-5 Barre' }],
+  B7: [{ frets: [null, 2, 1, 2, 0, 2], shapeName: 'Open Position' }],
+  Bm7: [{ frets: [null, 2, 4, 2, 3, 2], shapeName: 'Root-5 Barre' }],
+  Bm7b5: [{ frets: [null, 2, 3, 2, 3, null], shapeName: 'Half-Diminished 5th-string' }],
+
+  Bb: [{ frets: [null, 1, 3, 3, 3, 1], shapeName: 'Root-5 Barre' }],
+  Bbm: [{ frets: [null, 1, 3, 3, 2, 1], shapeName: 'Root-5 Barre' }],
+};
+
+/**
+ * Intelligent Guitar Voicing Generator:
+ * Given any chord name, returns 2 to 4 distinct, playable guitar voicings across the neck
+ * (Open position, Root-6 barre, Root-5 barre, Upper triad / Inversion).
+ */
+export function generateVoicingOptions(
+  chordName: string,
+  tuningNotes?: string[]
+): VoicingOption[] {
+  const options: VoicingOption[] = [];
+  const seenFretStrings = new Set<string>();
+
+  const cleanName = chordName.replace(/\/.*$/, '').trim();
+  const tonicMatch = cleanName.match(/^([A-G][#b]?)/);
+  if (!tonicMatch) return [];
+  const tonic = tonicMatch[1];
+  const quality = cleanName.substring(tonic.length).toLowerCase();
+
+  // Helper to add voicing
+  const addVoicing = (frets: (number | null)[], shapeName: string) => {
+    // Check fret validity (0-16 frets, playable span <= 4)
+    const fretted = frets.filter((f): f is number => f !== null && f > 0);
+    if (fretted.length > 0) {
+      const minFret = Math.min(...fretted);
+      const maxFret = Math.max(...fretted);
+      if (maxFret > 16 || maxFret - minFret > 4) return;
+    }
+
+    const fretStr = frets.map((f) => (f === null ? 'X' : String(f)));
+    const key = fretStr.join('-');
+    if (seenFretStrings.has(key)) return;
+    seenFretStrings.add(key);
+
+    const notes = getVoicedNotes(frets, tuningNotes);
+    if (notes.length >= 2) {
+      options.push({
+        fretPositions: fretStr,
+        notes,
+        shapeName,
+      });
+    }
+  };
+
+  // 1. Check known open shapes
+  const normalizedKey = cleanName.replace(/\s+/g, '');
+  if (KNOWN_OPEN_VOICINGS[normalizedKey]) {
+    for (const v of KNOWN_OPEN_VOICINGS[normalizedKey]) {
+      addVoicing(v.frets, v.shapeName);
+    }
+  }
+
+  // 2. Movable Root-6 (E-shape) Barre
+  const root6Fret = getFretForNoteOnString(0, tonic);
+  if (root6Fret !== null) {
+    const r = root6Fret;
+    if (quality.includes('m7b5') || quality.includes('dim')) {
+      addVoicing([r, null, r - 1 < 0 ? r + 11 : r - 1, r, r - 1 < 0 ? r + 11 : r - 1, null], 'Root-6 Diminished');
+    } else if (quality.includes('maj7') || quality.includes('m7+')) {
+      addVoicing([r, null, r + 1, r + 1, r, null], 'Root-6 Maj7 (Jazz)');
+    } else if (quality.includes('m7') || quality.includes('min7')) {
+      addVoicing([r, r + 2, r, r, r, r], 'Root-6 Min7');
+    } else if (quality.includes('7')) {
+      addVoicing([r, r + 2, r, r + 1, r, r], 'Root-6 Dominant 7');
+    } else if (quality.includes('m') || quality.includes('min')) {
+      addVoicing([r, r + 2, r + 2, r, r, r], 'Root-6 Barre (Minor)');
+    } else if (quality.includes('sus4')) {
+      addVoicing([r, r + 2, r + 2, r + 2, r, r], 'Root-6 Sus4');
+    } else {
+      addVoicing([r, r + 2, r + 2, r + 1, r, r], 'Root-6 Barre (Major)');
+    }
+  }
+
+  // 3. Movable Root-5 (A-shape) Barre
+  const root5Fret = getFretForNoteOnString(1, tonic);
+  if (root5Fret !== null) {
+    const r = root5Fret;
+    if (quality.includes('m7b5')) {
+      addVoicing([null, r, r + 1, r, r + 1, null], 'Root-5 Half-Diminished');
+    } else if (quality.includes('maj7')) {
+      addVoicing([null, r, r + 2, r + 1, r + 2, r], 'Root-5 Maj7');
+    } else if (quality.includes('m7') || quality.includes('min7')) {
+      addVoicing([null, r, r + 2, r, r + 1, r], 'Root-5 Min7');
+    } else if (quality.includes('7')) {
+      addVoicing([null, r, r + 2, r, r + 2, r], 'Root-5 Dominant 7');
+    } else if (quality.includes('m') || quality.includes('min')) {
+      addVoicing([null, r, r + 2, r + 2, r + 1, r], 'Root-5 Barre (Minor)');
+    } else if (quality.includes('sus4')) {
+      addVoicing([null, r, r + 2, r + 2, r + 3, r], 'Root-5 Sus4');
+    } else if (quality.includes('add9')) {
+      addVoicing([null, r, r + 2, r + 4, r + 2, null], 'Root-5 Add9');
+    } else {
+      addVoicing([null, r, r + 2, r + 2, r + 2, null], 'Root-5 Barre (Major)');
+    }
+  }
+
+  // 4. Movable Root-4 (D-shape / Upper Triads)
+  const root4Fret = getFretForNoteOnString(2, tonic);
+  if (root4Fret !== null && root4Fret <= 12) {
+    const r = root4Fret;
+    if (quality.includes('m') || quality.includes('min')) {
+      addVoicing([null, null, r, r + 2, r + 3, r + 1], 'Upper Triad (D-shape minor)');
+    } else if (quality.includes('7')) {
+      addVoicing([null, null, r, r + 2, r + 1, r + 2], 'Upper 7th (D-shape)');
+    } else {
+      addVoicing([null, null, r, r + 2, r + 3, r + 2], 'Upper Triad (D-shape major)');
+    }
+  }
+
+  return options.slice(0, 4);
+}

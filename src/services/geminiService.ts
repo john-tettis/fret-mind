@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
-import type { AiAnalysisResult, ChordItem } from '../types';
-import { beautifyChordSymbol } from '../utils/guitarTheory';
+import type { AiAnalysisResult, ChordItem, SectionModalAnalysis } from '../types';
+import { beautifyChordSymbol, detectLikelyKeys, generateVoicingOptions } from '../utils/guitarTheory';
 import { Note } from '@tonaljs/tonal';
 
 // Prioritized list of active Gemini models (2026)
@@ -137,14 +137,15 @@ export async function analyzeProgressionWithGemini(
   const cleanKey = apiKey.trim();
   const ai = new GoogleGenAI({ apiKey: cleanKey });
 
-  // Format progression payload including both chord names and exact voiced notes
+  // Format progression payload including both chord names, sections, and exact voiced notes
   const formattedProgression = progression
     .map((chord, idx) => {
+      const sectionStr = chord.section ? `[Section: ${chord.section}] ` : '';
       const voicingStr = chord.fretPositions
         .map((f) => (f === null ? 'X' : f.toString()))
         .join('-');
       const notesStr = chord.notes.join('-');
-      return `Chord ${idx + 1}: ${chord.name} [Voicing: ${voicingStr}, Notes: ${notesStr}]`;
+      return `${sectionStr}Chord ${idx + 1}: ${chord.name} [Voicing: ${voicingStr}, Notes: ${notesStr}]`;
     })
     .join('\n');
 
@@ -194,9 +195,10 @@ VOICING & GUITAR REQUIREMENTS:
 1. Candidate Keys: List candidate keys or modal centers (e.g., "E Dorian / E Minor", "A Major").
 2. Deciding Chords: List chords that clarify tonal/modal direction.
 3. Next Chord Recommendations: Provide 4-6 ranked chords with fitScore (1-100).
-   - Each recommendation MUST have realistic, ergonomic guitar fretPositions (6 strings from low E to high E, e.g. ["X", "0", "2", "2", "2", "0"] or ["5", "7", "7", "6", "5", "5"]) and corresponding scientific pitch notes.
+   - For EACH recommendation, provide 2 to 3 distinct playable guitar voicingOptions (e.g. Open Position, Root-6 Barre, Root-5 Barre, Triads) with realistic fretPositions (6 strings from low E to high E, e.g. ["X", "0", "2", "2", "2", "0"] or ["5", "7", "7", "6", "5", "5"]) and corresponding scientific pitch notes.
    - Voicings must maintain close voice leading and finger economy relative to the final chord of the progression.
    - In "theoreticalFunction", clearly explain the modal or harmonic mechanism (e.g., "Dorian IV (Modal Interchange) continuing the descending chromatic voice line E -> D# -> D -> C#").
+4. Section Transitions & Modal Switches: If the progression contains labeled sections (e.g., [Section: Verse], [Section: Chorus]), analyze the transition between them. Identify any modal shift or modulation (e.g., "Relative Major Modulation", "Parallel Borrowing") and explain how they relate.
 
 Return your response strictly as a JSON object matching this schema:
 {
@@ -210,9 +212,13 @@ Return your response strictly as a JSON object matching this schema:
       "fitScore": 95,
       "theoreticalFunction": "...",
       "voicingOptions": [
-        { "fretPositions": ["X", "0", "2", "2", "2", "0"], "notes": ["A2", "E3", "A3", "Db4", "E4"] }
+        { "fretPositions": ["X", "0", "2", "2", "2", "0"], "notes": ["A2", "E3", "A3", "Db4", "E4"], "shapeName": "Open Shape" },
+        { "fretPositions": ["5", "7", "7", "6", "5", "5"], "notes": ["A2", "E3", "A3", "Db4", "E4", "A4"], "shapeName": "Root-6 Barre" }
       ]
     }
+  ],
+  "sectionAnalysis": [
+    { "fromSection": "Verse", "toSection": "Chorus", "modalShift": "Relative Major Modulation", "explanation": "..." }
   ]
 }`;
 
@@ -263,6 +269,10 @@ Return your response strictly as a JSON object matching this schema:
                     type: 'ARRAY',
                     items: { type: 'STRING' },
                   },
+                  shapeName: {
+                    type: 'STRING',
+                    description: 'Name of the shape, e.g. Open Position, Root-6 Barre, Root-5 Barre, Upper Triad',
+                  },
                 },
                 required: ['fretPositions', 'notes'],
               },
@@ -270,6 +280,20 @@ Return your response strictly as a JSON object matching this schema:
           },
           required: ['chordName', 'fitScore', 'theoreticalFunction', 'voicingOptions'],
         },
+      },
+      sectionAnalysis: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            fromSection: { type: 'STRING' },
+            toSection: { type: 'STRING' },
+            modalShift: { type: 'STRING' },
+            explanation: { type: 'STRING' },
+          },
+          required: ['fromSection', 'toSection', 'modalShift', 'explanation'],
+        },
+        description: 'Harmonic analysis of modal switches, emotional contrasts, and transitions between sections.',
       },
       overviewExplanation: {
         type: 'STRING',
@@ -351,10 +375,32 @@ Return your response strictly as a JSON object matching this schema:
       parsed.source = 'gemini';
       parsed.modelUsed = workingModelUsed;
       parsed.explorationStyle = style;
+      parsed.likelyKeys = detectLikelyKeys(progression);
 
       if (parsed.nextChordSuggestions) {
         parsed.nextChordSuggestions.forEach((s) => {
           s.chordName = beautifyChordSymbol(s.chordName);
+          // Auto-supplement voicings if fewer than 2 provided
+          if (!s.voicingOptions || s.voicingOptions.length <= 1) {
+            const extra = generateVoicingOptions(s.chordName);
+            if (extra.length > 0) {
+              const existing = s.voicingOptions?.[0];
+              if (existing) {
+                const filtered = extra.filter(
+                  (e) => e.fretPositions.join('') !== existing.fretPositions.join('')
+                );
+                s.voicingOptions = [
+                  {
+                    ...existing,
+                    shapeName: existing.shapeName || 'Voicing 1',
+                  },
+                  ...filtered,
+                ];
+              } else {
+                s.voicingOptions = extra;
+              }
+            }
+          }
         });
         parsed.nextChordSuggestions.sort((a, b) => b.fitScore - a.fitScore);
       }
@@ -748,10 +794,78 @@ export function generateDemoAnalysis(
       ? `A minor-keyed progression centered around ${root} Minor. Try ${nextChordSuggestions[0]?.chordName} for immediate resolution or ${nextChordSuggestions[1]?.chordName} for modal tension.`
       : `Harmonic progression centered around ${root} Major. Try ${nextChordSuggestions[0]?.chordName} for natural voice leading or ${nextChordSuggestions[1]?.chordName} for subtle modal borrowing.`;
 
+  // Auto-supplement voicings for demo recommendations
+  nextChordSuggestions.forEach((s) => {
+    if (!s.voicingOptions || s.voicingOptions.length <= 1) {
+      const extra = generateVoicingOptions(s.chordName);
+      if (extra.length > 0) {
+        const existing = s.voicingOptions?.[0];
+        if (existing) {
+          const filtered = extra.filter(
+            (e) => e.fretPositions.join('') !== existing.fretPositions.join('')
+          );
+          s.voicingOptions = [
+            {
+              ...existing,
+              shapeName: existing.shapeName || 'Voicing 1',
+            },
+            ...filtered,
+          ];
+        } else {
+          s.voicingOptions = extra;
+        }
+      }
+    }
+  });
+
+  const likelyKeys = detectLikelyKeys(progression);
+
+  // Section modal analysis
+  const sectionsPresent: string[] = [];
+  progression.forEach((c) => {
+    const s = c.section || 'Verse';
+    if (!sectionsPresent.includes(s)) sectionsPresent.push(s);
+  });
+
+  const sectionAnalysis: SectionModalAnalysis[] = [];
+  if (sectionsPresent.length >= 2) {
+    for (let i = 0; i < sectionsPresent.length - 1; i++) {
+      const fromSec = sectionsPresent[i];
+      const toSec = sectionsPresent[i + 1];
+      const fromChords = progression.filter((c) => (c.section || 'Verse') === fromSec);
+      const toChords = progression.filter((c) => (c.section || 'Verse') === toSec);
+
+      const fromKeys = detectLikelyKeys(fromChords);
+      const toKeys = detectLikelyKeys(toChords);
+      const fromKey = fromKeys[0]?.key || 'Tonic Key';
+      const toKey = toKeys[0]?.key || 'Relative Key';
+
+      let modalShift = `${fromKey} → ${toKey}`;
+      let explanation = `Transitions from ${fromSec} in ${fromKey} to ${toSec} in ${toKey}, establishing renewed dynamic momentum and harmonic contrast.`;
+
+      if (fromKey.includes('Minor') && toKey.includes('Major')) {
+        modalShift = `Minor to Relative Major Lift (${fromKey} → ${toKey})`;
+        explanation = `The ${fromSec} establishes minor tension, which bursts into an uplifting, resonant ${toKey} in the ${toSec}.`;
+      } else if (fromKey.includes('Major') && toKey.includes('Minor')) {
+        modalShift = `Major to Relative Minor Contrast (${fromKey} → ${toKey})`;
+        explanation = `The ${fromSec} provides open major resonance, giving way to darker emotional depth in the ${toSec}.`;
+      }
+
+      sectionAnalysis.push({
+        fromSection: fromSec,
+        toSection: toSec,
+        modalShift,
+        explanation,
+      });
+    }
+  }
+
   return {
     potentialKeys,
+    likelyKeys,
     decidingChords,
     nextChordSuggestions,
+    sectionAnalysis,
     overviewExplanation: overview,
     detectedStyle: detectedGenre,
     source: 'demo',
@@ -759,4 +873,126 @@ export function generateDemoAnalysis(
     modelUsed: 'Harmonic Theory Engine',
     explorationStyle: style,
   };
+}
+
+/**
+ * Free-form chat assistant with full progression, section, and tuning context
+ */
+export async function chatWithProgressionAssistant(
+  apiKey: string,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  context: {
+    progression: ChordItem[];
+    tuningNotes: string[];
+    tuningName: string;
+    likelyKeys: string[];
+  }
+): Promise<string> {
+  const chordsFormatted =
+    context.progression.length > 0
+      ? context.progression
+          .map(
+            (c, idx) =>
+              `${c.section ? `[${c.section}] ` : ''}#${idx + 1} ${c.name} (${c.notes.join(' ')})`
+          )
+          .join(', ')
+      : 'No chords added to timeline yet';
+
+  const systemPrompt = `You are an elite music producer, guitarist, and music theory expert assistant inside FretMind, a modern guitar progression studio.
+The user is currently writing a song with the following context:
+- Chord Progression: ${chordsFormatted}
+- Guitar Tuning: ${context.tuningName} (${context.tuningNotes.join(' ')})
+- Likely Keys: ${context.likelyKeys.join(', ') || 'Undetermined yet'}
+
+Guidelines:
+1. Provide concise, highly musical, inspiring, and theoretically sound answers.
+2. When mentioning chords (e.g. Fmaj7, Am9, D7, Cadd9), mention them clearly so the guitarist can try them immediately.
+3. If the user asks about scales or soloing, suggest specific modes/pentatonics (e.g. "A Dorian" or "C Major Pentatonic") and target guide tones (3rds and 7ths).
+4. If the user asks about transitions between sections (e.g. Verse to Chorus), suggest passing chords, secondary dominants, or chromatic basslines.
+5. Keep answers formatted nicely with bullet points where appropriate, avoiding long walls of text.`;
+
+  if (apiKey && apiKey.trim()) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+      const model = cachedWorkingModel || 'gemini-2.0-flash';
+
+      const formattedHistory = messages.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
+      const resp = await ai.models.generateContent({
+        model,
+        contents: formattedHistory as any,
+        config: {
+          systemInstruction: systemPrompt,
+        },
+      });
+
+      if (resp.text) {
+        return resp.text;
+      }
+    } catch (err: any) {
+      console.warn('Gemini chat error, falling back to theory engine:', err);
+    }
+  }
+
+  // Fallback intelligent music theorist response
+  const lastUserMsg = messages[messages.length - 1]?.content.toLowerCase() || '';
+  const currentChords = context.progression.map((c) => c.name);
+  const primaryKey = context.likelyKeys[0] || 'C Major';
+
+  if (lastUserMsg.includes('solo') || lastUserMsg.includes('scale')) {
+    return `### Recommended Soloing Scales for ${primaryKey}
+
+Over your current progression (${currentChords.join(' → ') || 'timeline'}):
+- **Primary Scale:** **${primaryKey} Pentatonic** — Great for memorable melodic motifs and vocal hooks.
+- **Modal Color:** **${primaryKey.includes('Minor') ? 'Dorian mode (raised 6th)' : 'Mixolydian or Lydian mode'}** — Injects color tones without clashing with the underlying triads.
+- **Guide Tones:** Target the 3rd and 7th of each chord as it arrives to spell out the harmonic changes cleanly.
+
+*(Connect your Gemini API key in Settings for deeper improvisation strategies!)*`;
+  }
+
+  if (
+    lastUserMsg.includes('transition') ||
+    lastUserMsg.includes('chorus') ||
+    lastUserMsg.includes('bridge')
+  ) {
+    const lastChord = currentChords[currentChords.length - 1] || 'Em';
+    return `### Section Transition Advice
+
+To transition from your current section into the next:
+- **Secondary Dominant:** Play the dominant 7th of the upcoming section's first chord on the final measure (e.g., G7 if heading to C Major, or E7 if heading to A Minor).
+- **Chromatic Bass Movement:** Walk the lowest bass note smoothly up or down by half-steps towards the new section's root.
+- **Suspension Lift:** End the verse on a **sus4** or **add9** variation of ${lastChord} to create unresolved anticipation before the chorus drops.
+
+*(Tip: Add your Gemini API key in Settings to brainstorm full 8-bar section ideas!)*`;
+  }
+
+  if (
+    lastUserMsg.includes('substitution') ||
+    lastUserMsg.includes('voicing') ||
+    lastUserMsg.includes('change')
+  ) {
+    return `### Harmonic Substitution Ideas
+
+For your progression (${currentChords.join(' → ') || 'empty'}):
+- **Relative Substitution:** Swap any major chord for its relative minor (e.g., C Major ↔ A Minor) to add vulnerability while retaining melodic notes.
+- **Tritone Substitution:** If you have a dominant 7th chord, replace it with the dominant 7th six semitones away (e.g., Db7 instead of G7).
+- **Minor Plagal Cadence:** Use the minor iv chord (e.g., Fm in C Major) for that bittersweet Beatles/Radiohead emotional resolution.
+
+*(Connect your Gemini API key to ask free-form custom questions!)*`;
+  }
+
+  return `### Music Theory Assistant
+
+Your progression currently contains **${currentChords.length} chords** (${currentChords.join(' → ') || 'None yet'}), centered around **${primaryKey}** in **${context.tuningName}** tuning.
+
+Here are a few things you can ask me:
+- *"What scale should I solo with?"*
+- *"How do I transition between Verse and Chorus?"*
+- *"Suggest a bridge progression that modulates to a new key"*
+- *"What are good chord substitutions for chord #2?"*
+
+*(To unlock unconstrained AI conversation with Google Gemini models, enter your API key in Settings!)*`;
 }
