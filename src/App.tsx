@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Fretboard } from './components/Fretboard';
 import { ProgressionTimeline } from './components/ProgressionTimeline';
@@ -11,6 +11,19 @@ import { audioEngine } from './services/audioEngine';
 
 const MainApp: React.FC = () => {
   const { runAiAnalysis, progression, activeView, chatDockPosition } = useStore();
+  const prevViewRef = useRef(activeView);
+  const [transitionClass, setTransitionClass] = useState('');
+
+  useEffect(() => {
+    if (prevViewRef.current !== activeView) {
+      if (activeView === 'instructions') {
+        setTransitionClass('animate-view-slide-right');
+      } else {
+        setTransitionClass('animate-view-slide-left');
+      }
+      prevViewRef.current = activeView;
+    }
+  }, [activeView]);
 
   useEffect(() => {
     // Only run analysis if there are actual chords in progression (no preset loaded at first)
@@ -44,42 +57,45 @@ const MainApp: React.FC = () => {
       {/* Top Studio Navbar */}
       <Navbar />
 
-      {activeView === 'instructions' ? (
-        <main className="flex-1 w-full pb-20 relative z-10">
-          <InstructionsView />
-        </main>
-      ) : (
-        <>
-          {/* Sticky Guitar Fretboard Neck */}
-          <div className="sticky top-0 z-40 bg-[#101014]/90 backdrop-blur-xl border-b border-white/[0.08] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)] px-2 sm:px-4 py-2 transition-all">
-            <div className="max-w-[1700px] w-full mx-auto">
-              <Fretboard />
-            </div>
-          </div>
-
-          {/* Main Studio Area: Progression (Left) and AI Harmonic Recommendations (Right) */}
-          <main
-            className={`flex-1 max-w-[1700px] w-full mx-auto px-2 sm:px-4 pt-3 ${
-              chatDockPosition === 'bottom' ? 'pb-28' : 'pb-12'
-            } relative z-10`}
-          >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              {/* Left Block: Chord Progression Timeline & Tape Transport */}
-              <section aria-label="Chord Progression Timeline" className="@container/timeline">
-                <ProgressionTimeline />
-              </section>
-
-              {/* Right Block: Harmonic Analysis & Next Chord Suggestions */}
-              <section aria-label="AI Harmonic Analysis" className="@container/analysis">
-                <AiAnalysisSection />
-              </section>
-            </div>
+      {/* Animated View Container with Directional Slide & Bounce */}
+      <div key={activeView} className={`flex-1 flex flex-col ${transitionClass}`}>
+        {activeView === 'instructions' ? (
+          <main className="flex-1 w-full pb-20 relative z-10">
+            <InstructionsView />
           </main>
+        ) : (
+          <>
+            {/* Sticky Guitar Fretboard Neck */}
+            <div className="sticky top-0 z-40 bg-[#101014]/90 backdrop-blur-xl border-b border-white/[0.08] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.5)] px-2 sm:px-4 py-2 transition-all">
+              <div className="max-w-[1700px] w-full mx-auto">
+                <Fretboard />
+              </div>
+            </div>
 
-          {/* AI Harmonic Producer & Theory Chat Drawer (when docked at bottom) */}
-          {chatDockPosition === 'bottom' && <AiChatDrawer />}
-        </>
-      )}
+            {/* Main Studio Area: Progression (Left) and AI Harmonic Recommendations (Right) */}
+            <main
+              className={`flex-1 max-w-[1700px] w-full mx-auto px-2 sm:px-4 pt-3 ${
+                chatDockPosition === 'bottom' ? 'pb-28' : 'pb-12'
+              } relative z-10`}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                {/* Left Block: Chord Progression Timeline & Tape Transport */}
+                <section aria-label="Chord Progression Timeline" className="@container/timeline">
+                  <ProgressionTimeline />
+                </section>
+
+                {/* Right Block: Harmonic Analysis & Next Chord Suggestions */}
+                <section aria-label="AI Harmonic Analysis" className="@container/analysis">
+                  <AiAnalysisSection />
+                </section>
+              </div>
+            </main>
+          </>
+        )}
+      </div>
+
+      {/* AI Harmonic Producer & Theory Chat Drawer (fixed outside animated container) */}
+      {activeView === 'studio' && chatDockPosition === 'bottom' && <AiChatDrawer />}
 
       {/* BYOK API Key Modal */}
       <ApiKeyModal />

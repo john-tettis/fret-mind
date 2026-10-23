@@ -50,7 +50,7 @@ export const Navbar: React.FC = () => {
           <nav className="flex items-center bg-[#19191e] p-0.5 rounded-lg border border-white/[0.08] shadow-inner">
             <button
               onClick={() => setActiveView('studio')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 active:scale-95 cursor-pointer ${
                 activeView === 'studio'
                   ? 'bg-[#272730] text-[#f2f2f5] shadow-sm font-semibold border border-white/[0.05]'
                   : 'text-[#8e8e98] hover:text-[#e0e0e6]'
@@ -60,7 +60,7 @@ export const Navbar: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveView('instructions')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 active:scale-95 cursor-pointer ${
                 activeView === 'instructions'
                   ? 'bg-[#272730] text-[#f2f2f5] shadow-sm font-semibold border border-white/[0.05]'
                   : 'text-[#8e8e98] hover:text-[#e0e0e6]'
