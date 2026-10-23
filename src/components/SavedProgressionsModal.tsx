@@ -178,19 +178,19 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-[#18181b] border border-[#27272c] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200 select-none">
+      <div className="bg-[#131317]/98 border border-white/[0.1] rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] overflow-hidden relative transition-all">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-[#242429] flex items-center justify-between bg-[#141417]">
+        <div className="p-4 sm:p-5 border-b border-white/[0.07] flex items-center justify-between bg-[#111115]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#261f18] text-amber-400 border border-[#3d3126]">
+            <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-[0_0_12px_-2px_rgba(245,158,11,0.3)]">
               <Bookmark className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-[#f5ede0] font-serif tracking-tight m-0">
+              <h3 className="text-base sm:text-lg font-bold text-[#f2f2f5] font-display tracking-tight m-0">
                 Progression Presets & Library
               </h3>
-              <p className="text-xs text-[#a69787] m-0">
+              <p className="text-xs text-[#8e8e98] m-0">
                 Save your chord progressions, load factory presets, and manage custom voicings
               </p>
             </div>
@@ -200,7 +200,7 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
               stopPreview();
               onClose();
             }}
-            className="p-1.5 rounded-lg text-[#8a7c6e] hover:text-white hover:bg-[#241e18] transition-colors"
+            className="p-1.5 rounded-lg text-[#8e8e98] hover:text-[#f2f2f5] hover:bg-white/[0.08] transition-colors"
             title="Close modal"
           >
             <X className="w-5 h-5" />
@@ -208,17 +208,17 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 px-4 pt-3 bg-[#0e0c0a] border-b border-[#241e18] text-xs font-semibold">
+        <div className="flex items-center gap-2 px-4 pt-3 bg-[#0d0d11] border-b border-white/[0.06] text-xs font-semibold">
           <button
             onClick={() => {
               stopPreview();
               setActiveTab('save');
             }}
             disabled={progression.length === 0}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all disabled:opacity-30 ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 border-b-2 transition-all disabled:opacity-30 ${
               activeTab === 'save'
                 ? 'border-amber-400 text-amber-300 font-bold'
-                : 'border-transparent text-[#8a7c6e] hover:text-[#d1c6b8]'
+                : 'border-transparent text-[#8e8e98] hover:text-[#d1d1d8]'
             }`}
           >
             <BookmarkPlus className="w-3.5 h-3.5" />
@@ -230,10 +230,10 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
               stopPreview();
               setActiveTab('my-presets');
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 border-b-2 transition-all ${
               activeTab === 'my-presets'
                 ? 'border-amber-400 text-amber-300 font-bold'
-                : 'border-transparent text-[#8a7c6e] hover:text-[#d1c6b8]'
+                : 'border-transparent text-[#8e8e98] hover:text-[#d1d1d8]'
             }`}
           >
             <Music className="w-3.5 h-3.5" />
@@ -245,10 +245,10 @@ export const SavedProgressionsModal: React.FC<SavedProgressionsModalProps> = ({
               stopPreview();
               setActiveTab('factory');
             }}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-2 border-b-2 transition-all ${
               activeTab === 'factory'
                 ? 'border-amber-400 text-amber-300 font-bold'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-[#8e8e98] hover:text-[#d1d1d8]'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />

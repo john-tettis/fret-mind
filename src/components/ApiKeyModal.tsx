@@ -66,15 +66,15 @@ export const ApiKeyModal: React.FC = () => {
   const isAizaFormat = inputVal.trim().startsWith('AIza');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200 select-none">
       <div
-        className="bg-[#18181b] border border-[#27272c] rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-[#edeef0] max-h-[90vh] overflow-y-auto"
+        className="bg-[#131317]/98 border border-white/[0.1] rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-[#ededf0] max-h-[90vh] overflow-y-auto backdrop-blur-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={() => setKeyModalOpen(false)}
-          className="absolute top-5 right-5 p-1.5 rounded-lg text-[#8a7c6e] hover:text-white hover:bg-[#241e18] transition-colors"
+          className="absolute top-5 right-5 p-1.5 rounded-lg text-[#8e8e98] hover:text-[#f2f2f5] hover:bg-white/[0.08] transition-colors"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
@@ -82,17 +82,17 @@ export const ApiKeyModal: React.FC = () => {
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="p-2.5 rounded-xl bg-[#241d17] border border-[#3d3126] text-amber-400">
+          <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-[0_0_12px_-2px_rgba(245,158,11,0.3)]">
             <Key className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[#f5ede0] font-serif flex items-center gap-2">
+            <h2 className="text-xl font-bold text-[#f2f2f5] font-display flex items-center gap-2 m-0 tracking-tight">
               Gemini API Key Settings
-              <span className="text-xs px-2 py-0.5 rounded-full bg-[#18261b] text-emerald-300 font-mono border border-emerald-700/50">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 font-mono border border-emerald-500/30 font-medium">
                 BYOK
               </span>
             </h2>
-            <p className="text-xs text-[#a69787] m-0">
+            <p className="text-xs text-[#8e8e98] m-0 mt-0.5">
               Bring Your Own Key for AI harmonic analysis & recommendations
             </p>
           </div>
