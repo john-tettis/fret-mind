@@ -1,13 +1,23 @@
 import { create } from 'zustand';
-import type { AiAnalysisResult, ChordItem, DetectedChordInfo, PlaybackState, SavedProgression } from '../types';
+import type {
+  AiAnalysisResult,
+  ChordItem,
+  DetectedChordInfo,
+  PlaybackState,
+  SavedProgression,
+  ChatMessage,
+  DetectedKeyCandidate,
+} from '../types';
 import { audioEngine } from '../services/audioEngine';
 import {
   analyzeProgressionWithGemini,
   generateDemoAnalysis,
+  chatWithProgressionAssistant,
   type ExplorationStyle,
 } from '../services/geminiService';
 import {
   detectChordFromFrets,
+  detectLikelyKeys,
   getVoicedNotes,
   parseFretPositions,
   PRESET_PROGRESSIONS,
@@ -54,8 +64,12 @@ interface AppStore {
 
   // Chord Progression
   progression: ChordItem[];
+  likelyKeys: DetectedKeyCandidate[];
+  activeSection: string; // Currently active section for new chords (default: "Verse")
+  setActiveSection: (section: string) => void;
+  setChordSection: (chordId: string, section: string) => void;
   addCurrentToProgression: () => void;
-  addChordToProgression: (name: string, fretPositions: (number | null)[]) => void;
+  addChordToProgression: (name: string, fretPositions: (number | null)[], section?: string) => void;
   removeChord: (id: string) => void;
   reorderChord: (fromIndex: number, toIndex: number) => void;
   clearProgression: () => void;
@@ -87,12 +101,23 @@ interface AppStore {
   runAiAnalysis: (forceDemo?: boolean) => Promise<void>;
   applyVoicingToFretboard: (fretPositions: string[]) => void;
   addSuggestionToProgression: (chordName: string, fretPositions: string[]) => void;
+
+  // AI Studio Chat Assistant
+  chatMessages: ChatMessage[];
+  isChatOpen: boolean;
+  setIsChatOpen: (open: boolean) => void;
+  chatDockPosition: 'panel' | 'bottom';
+  setChatDockPosition: (pos: 'panel' | 'bottom') => void;
+  isSendingChat: boolean;
+  sendChatMessage: (content: string) => Promise<void>;
+  clearChat: () => void;
 }
 
 const STORAGE_KEY = 'fretmind_gemini_key';
 const STORAGE_HEIGHT_KEY = 'fretmind_neck_height';
 const STORAGE_STRETCH_KEY = 'fretmind_neck_stretch';
 const STORAGE_SAVED_PROGRESSIONS_KEY = 'fretmind_saved_progressions';
+const STORAGE_CHAT_DOCK_KEY = 'fretmind_chat_dock';
 
 // Default initial fretboard starts clear (no preset loaded at first)
 const INITIAL_FRETBOARD: (number | null)[] = [null, null, null, null, null, null];
@@ -118,6 +143,9 @@ export const useStore = create<AppStore>((set, get) => {
       console.warn('Failed to parse saved progressions from localStorage', e);
     }
   }
+
+  const savedChatDock = typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_CHAT_DOCK_KEY) as 'panel' | 'bottom') : null;
+  const initialChatDock: 'panel' | 'bottom' = savedChatDock === 'bottom' ? 'bottom' : 'panel';
 
   const initialTuningNotes = [...STANDARD_TUNING];
   const initialDetected = detectChordFromFrets(INITIAL_FRETBOARD, initialTuningNotes);
@@ -210,9 +238,21 @@ export const useStore = create<AppStore>((set, get) => {
     },
 
     progression: INITIAL_PROGRESSION,
+    likelyKeys: detectLikelyKeys(INITIAL_PROGRESSION),
+    activeSection: 'Verse',
+    setActiveSection: (section: string) => set({ activeSection: section }),
+
+    setChordSection: (chordId: string, section: string) => {
+      const { progression } = get();
+      const updated = progression.map((c) =>
+        c.id === chordId ? { ...c, section } : c
+      );
+      set({ progression: updated, likelyKeys: detectLikelyKeys(updated) });
+      get().runAiAnalysis();
+    },
 
     addCurrentToProgression: () => {
-      const { currentFretboard, detectedChord, progression, tuningNotes } = get();
+      const { currentFretboard, detectedChord, progression, tuningNotes, activeSection } = get();
       const notes = getVoicedNotes(currentFretboard, tuningNotes);
       if (notes.length === 0) return;
 
@@ -222,25 +262,28 @@ export const useStore = create<AppStore>((set, get) => {
         name: chordName,
         notes: notes,
         fretPositions: [...currentFretboard],
+        section: activeSection || 'Verse',
       };
 
       const updated = [...progression, newChord];
-      set({ progression: updated });
+      set({ progression: updated, likelyKeys: detectLikelyKeys(updated) });
 
       // Automatically trigger or refresh analysis
       get().runAiAnalysis();
     },
 
-    addChordToProgression: (name: string, fretPositions: (number | null)[]) => {
-      const { progression, tuningNotes } = get();
+    addChordToProgression: (name: string, fretPositions: (number | null)[], section?: string) => {
+      const { progression, tuningNotes, activeSection } = get();
       const notes = getVoicedNotes(fretPositions, tuningNotes);
       const newChord: ChordItem = {
         id: `chord-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         name: name,
         notes: notes,
         fretPositions: fretPositions,
+        section: section || activeSection || 'Verse',
       };
-      set({ progression: [...progression, newChord] });
+      const updated = [...progression, newChord];
+      set({ progression: updated, likelyKeys: detectLikelyKeys(updated) });
       get().runAiAnalysis();
     },
 
@@ -250,7 +293,7 @@ export const useStore = create<AppStore>((set, get) => {
       if (playback.isPlaying && updated.length === 0) {
         get().stopPlayback();
       }
-      set({ progression: updated });
+      set({ progression: updated, likelyKeys: detectLikelyKeys(updated) });
       get().runAiAnalysis();
     },
 
@@ -260,13 +303,13 @@ export const useStore = create<AppStore>((set, get) => {
       const copy = [...progression];
       const [moved] = copy.splice(fromIndex, 1);
       copy.splice(toIndex, 0, moved);
-      set({ progression: copy });
+      set({ progression: copy, likelyKeys: detectLikelyKeys(copy) });
       get().runAiAnalysis();
     },
 
     clearProgression: () => {
       get().stopPlayback();
-      set({ progression: [], aiAnalysis: null, analysisError: null });
+      set({ progression: [], likelyKeys: [], aiAnalysis: null, analysisError: null });
     },
 
     loadChordToFretboard: (chord: ChordItem) => {
@@ -286,10 +329,11 @@ export const useStore = create<AppStore>((set, get) => {
           name: c.name,
           notes: notes,
           fretPositions: frets,
+          section: i < 2 ? 'Verse' : 'Chorus',
         };
       });
 
-      set({ progression: loadedChords });
+      set({ progression: loadedChords, likelyKeys: detectLikelyKeys(loadedChords) });
       if (loadedChords.length > 0) {
         get().setFretboardVoicing([...loadedChords[0].fretPositions]);
       }
@@ -481,6 +525,84 @@ export const useStore = create<AppStore>((set, get) => {
     addSuggestionToProgression: (chordName: string, fretPositions: string[]) => {
       const parsed = parseFretPositions(fretPositions);
       get().addChordToProgression(chordName, parsed);
+    },
+
+    // AI Studio Chat Assistant
+    chatMessages: [
+      {
+        id: 'welcome-msg',
+        role: 'assistant',
+        content: 'Welcome to your AI Music Theory & Production Assistant! As you build your chord progression, ask me anything about scales, voice leading, section transitions, or chord substitutions.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ],
+    isChatOpen: false,
+    setIsChatOpen: (open: boolean) => set({ isChatOpen: open }),
+    chatDockPosition: initialChatDock,
+    setChatDockPosition: (pos: 'panel' | 'bottom') => {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_CHAT_DOCK_KEY, pos);
+      }
+      set({
+        chatDockPosition: pos,
+        isChatOpen: pos === 'bottom' ? true : get().isChatOpen,
+      });
+    },
+    isSendingChat: false,
+
+    sendChatMessage: async (content: string) => {
+      if (!content || !content.trim()) return;
+      const userMsg: ChatMessage = {
+        id: `msg-${Date.now()}-user`,
+        role: 'user',
+        content: content.trim(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      const updatedMessages = [...get().chatMessages, userMsg];
+      set({ chatMessages: updatedMessages, isSendingChat: true });
+
+      try {
+        const { apiKey, progression, tuningNotes, tuningName, likelyKeys } = get();
+        const likelyKeyNames = likelyKeys.map((k) => k.key);
+        const replyText = await chatWithProgressionAssistant(apiKey, updatedMessages, {
+          progression,
+          tuningNotes,
+          tuningName,
+          likelyKeys: likelyKeyNames,
+        });
+
+        const assistantMsg: ChatMessage = {
+          id: `msg-${Date.now()}-assistant`,
+          role: 'assistant',
+          content: replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        set({ chatMessages: [...updatedMessages, assistantMsg], isSendingChat: false });
+      } catch (err: any) {
+        console.error('Chat error:', err);
+        const errorMsg: ChatMessage = {
+          id: `msg-${Date.now()}-error`,
+          role: 'assistant',
+          content: 'Sorry, I encountered an issue generating a response. Please check your connection or try again.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        set({ chatMessages: [...updatedMessages, errorMsg], isSendingChat: false });
+      }
+    },
+
+    clearChat: () => {
+      set({
+        chatMessages: [
+          {
+            id: `welcome-${Date.now()}`,
+            role: 'assistant',
+            content: 'Conversation cleared. How can I help you with your chord progression?',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ],
+      });
     },
   };
 });
