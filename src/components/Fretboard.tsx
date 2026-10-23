@@ -44,6 +44,8 @@ export const Fretboard: React.FC = () => {
   const [isTuningOpen, setIsTuningOpen] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const tuningDropdownRef = useRef<HTMLDivElement>(null);
+  const presetsDropdownRef = useRef<HTMLDivElement>(null);
   const dragStartYRef = useRef(0);
   const startHeightRef = useRef(32);
 
@@ -55,6 +57,28 @@ export const Fretboard: React.FC = () => {
       scrollContainerRef.current.scrollLeft = 0;
     }
   }, [zoomRange]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        tuningDropdownRef.current &&
+        !tuningDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTuningOpen(false);
+      }
+      if (
+        presetsDropdownRef.current &&
+        !presetsDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsPresetsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const visibleFrets =
     zoomRange === 'open'
@@ -136,11 +160,11 @@ export const Fretboard: React.FC = () => {
   const dotFontSize = Math.max(9, Math.min(12, Math.round(neckStringHeight * 0.3)));
 
   return (
-    <div className="w-full bg-[#18181b] border border-[#27272c] rounded-xl shadow-lg flex flex-col select-none overflow-hidden">
+    <div className="w-full bg-[#131317]/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col select-none relative z-30 transition-all">
       {/* 1. GUITAR FRETBOARD NECK */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto select-none bg-[#111113] border-b border-[#242429] px-2 py-1.5"
+        className="overflow-x-auto select-none bg-[#0e0e12] border-b border-white/[0.07] px-3 py-2 rounded-t-2xl shadow-inner"
       >
         <div className="relative px-1 w-full min-w-full">
           {/* Fret Numbers on Top */}
@@ -322,15 +346,15 @@ export const Fretboard: React.FC = () => {
       </div>
 
       {/* 2. CALM CONTROLS BAR */}
-      <div className="px-4 py-2.5 bg-[#18181b] flex flex-wrap items-center justify-between gap-3">
+      <div className="px-4 py-2.5 bg-[#141419]/95 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl relative z-40 border-t border-white/[0.04]">
         {/* Left: Clean Detected Chord Name & Notes */}
         <div className="flex items-center gap-3">
           <div className="flex items-baseline gap-2">
-            <span className="text-sm sm:text-base font-bold text-[#f2f2f4]">
+            <span className="text-sm sm:text-base font-bold text-[#f2f2f5] font-display tracking-tight">
               {detectedChord?.name || 'Empty Neck'}
             </span>
             {detectedChord?.intervals && detectedChord.intervals.length > 0 && (
-              <span className="text-xs font-mono text-[#8a8a93]">
+              <span className="text-xs font-mono text-amber-300/80 font-medium">
                 {detectedChord.intervals.join(' ')}
               </span>
             )}
@@ -342,7 +366,7 @@ export const Fretboard: React.FC = () => {
                 <button
                   key={`n-${note}-${idx}`}
                   onClick={() => audioEngine.playNote(note)}
-                  className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-[#222227] text-[#c8c8cf] hover:text-amber-300 transition-colors"
+                  className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-white/[0.06] text-[#c8c8cf] hover:text-amber-300 hover:bg-white/[0.1] border border-white/[0.06] transition-all"
                   title="Click to audition note"
                 >
                   {note}
@@ -355,14 +379,14 @@ export const Fretboard: React.FC = () => {
         {/* Right: Balanced, uncluttered action buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Fret Range Minimal Pill Toggle */}
-          <div className="flex items-center bg-[#141417] p-0.5 rounded-lg border border-[#2b2b32] text-xs">
+          <div className="flex items-center bg-[#191920] p-0.5 rounded-lg border border-white/[0.08] text-xs shadow-inner">
             {(['open', 'mid', 'full'] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setZoomRange(r)}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-all ${
                   zoomRange === r
-                    ? 'bg-[#27272e] text-[#f2f2f4] shadow-sm'
+                    ? 'bg-[#272732] text-[#f2f2f5] shadow-sm font-semibold border border-white/[0.06]'
                     : 'text-[#7e7e88] hover:text-[#d1d1d8]'
                 }`}
               >
@@ -372,19 +396,22 @@ export const Fretboard: React.FC = () => {
           </div>
 
           {/* Tuning Preset Dropdown */}
-          <div className="relative">
+          <div ref={tuningDropdownRef} className={`relative ${isTuningOpen ? 'z-50' : 'z-20'}`}>
             <button
-              onClick={() => setIsTuningOpen(!isTuningOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#202025] hover:bg-[#28282e] text-[#cfcfd6] border border-[#2b2b32] text-xs transition-colors"
+              onClick={() => {
+                setIsTuningOpen(!isTuningOpen);
+                if (!isTuningOpen) setIsPresetsOpen(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#1a1a20] hover:bg-[#24242c] text-[#cfcfd6] hover:text-[#f2f2f5] border border-white/[0.08] hover:border-white/[0.15] text-xs transition-all cursor-pointer"
             >
-              <Sliders className="w-3 h-3 opacity-70" />
+              <Sliders className="w-3 h-3 opacity-70 text-amber-400" />
               <span>{tuningName}</span>
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             {isTuningOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#1e1e22] border border-[#303038] rounded-xl shadow-xl py-1.5 z-50 max-h-64 overflow-y-auto">
-                <div className="px-3 py-1 text-[10px] uppercase font-bold text-[#7a7a85] border-b border-[#2b2b32]">
+              <div className="absolute right-0 top-full mt-1.5 w-60 bg-[#1c1c22]/98 backdrop-blur-2xl border border-white/[0.15] rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] py-1.5 z-50 max-h-64 overflow-y-auto ring-1 ring-black/70">
+                <div className="px-3 py-1 text-[10px] uppercase font-bold text-[#8a8a95] border-b border-white/[0.06] tracking-wider">
                   Guitar Tunings
                 </div>
                 {TUNING_PRESETS.map((t) => (
@@ -394,13 +421,13 @@ export const Fretboard: React.FC = () => {
                       setTuning(t.name, t.notes);
                       setIsTuningOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 text-xs flex flex-col hover:bg-white/[0.06] transition-colors ${
-                      tuningName === t.name ? 'bg-amber-500/10 text-amber-300 font-semibold' : 'text-[#c0c0c8]'
+                    className={`w-full text-left px-3 py-1.5 text-xs flex flex-col hover:bg-white/[0.08] transition-colors cursor-pointer ${
+                      tuningName === t.name ? 'bg-amber-500/15 text-amber-300 font-semibold' : 'text-[#c0c0c8]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span>{t.name}</span>
-                      <span className="text-[10px] font-mono text-[#7a7a85]">{t.notes.join(' ')}</span>
+                      <span className="text-[10px] font-mono text-[#8a8a95]">{t.notes.join(' ')}</span>
                     </div>
                   </button>
                 ))}
@@ -409,29 +436,32 @@ export const Fretboard: React.FC = () => {
           </div>
 
           {/* Voicings Preset Dropdown */}
-          <div className="relative">
+          <div ref={presetsDropdownRef} className={`relative ${isPresetsOpen ? 'z-50' : 'z-20'}`}>
             <button
-              onClick={() => setIsPresetsOpen(!isPresetsOpen)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#202025] hover:bg-[#28282e] text-[#cfcfd6] border border-[#2b2b32] text-xs transition-colors"
+              onClick={() => {
+                setIsPresetsOpen(!isPresetsOpen);
+                if (!isPresetsOpen) setIsTuningOpen(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#1a1a20] hover:bg-[#24242c] text-[#cfcfd6] hover:text-[#f2f2f5] border border-white/[0.08] hover:border-white/[0.15] text-xs transition-all cursor-pointer"
             >
-              <Bookmark className="w-3 h-3 opacity-70" />
+              <Bookmark className="w-3 h-3 opacity-70 text-amber-400" />
               <span>Voicings</span>
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
             {isPresetsOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-48 bg-[#1e1e22] border border-[#303038] rounded-xl shadow-xl py-1.5 z-50 max-h-56 overflow-y-auto">
-                <div className="px-3 py-1 text-[10px] uppercase font-bold text-[#7a7a85] border-b border-[#2b2b32]">
+              <div className="absolute right-0 top-full mt-1.5 w-48 bg-[#1c1c22]/98 backdrop-blur-2xl border border-white/[0.15] rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] py-1.5 z-50 max-h-56 overflow-y-auto ring-1 ring-black/70">
+                <div className="px-3 py-1 text-[10px] uppercase font-bold text-[#8a8a95] border-b border-white/[0.06] tracking-wider">
                   Chord Shapes
                 </div>
                 {PRESET_CHORDS.map((p) => (
                   <button
                     key={p.name}
                     onClick={() => handleSelectPreset(p)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-[#c0c0c8] hover:text-[#f2f2f4] hover:bg-white/[0.06] flex items-center justify-between"
+                    className="w-full text-left px-3 py-1.5 text-xs text-[#c0c0c8] hover:text-[#f2f2f5] hover:bg-white/[0.08] flex items-center justify-between transition-colors cursor-pointer"
                   >
                     <span>{p.name}</span>
-                    <span className="text-[10px] text-[#7a7a85]">{p.category}</span>
+                    <span className="text-[10px] text-[#8a8a95]">{p.category}</span>
                   </button>
                 ))}
               </div>
@@ -442,16 +472,16 @@ export const Fretboard: React.FC = () => {
           <button
             onClick={handleStrum}
             disabled={!detectedChord || detectedChord.notes.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#202025] hover:bg-[#28282e] text-[#f2f2f4] border border-[#2b2b32] text-xs font-medium transition-colors disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#1a1a20] hover:bg-[#25252d] text-[#f2f2f5] border border-white/[0.08] hover:border-white/[0.15] text-xs font-medium transition-all active:scale-95 disabled:opacity-30"
           >
-            <Play className="w-3 h-3 text-emerald-400" />
+            <Play className="w-3 h-3 text-emerald-400 fill-emerald-400/20" />
             <span>Strum</span>
           </button>
 
           {/* Clear Neck */}
           <button
             onClick={clearFretboard}
-            className="p-1.5 rounded-lg bg-[#202025] hover:bg-red-950/30 text-[#858590] hover:text-red-400 border border-[#2b2b32] transition-colors"
+            className="p-1.5 rounded-lg bg-[#1a1a20] hover:bg-rose-950/40 text-[#858590] hover:text-rose-300 border border-white/[0.08] hover:border-rose-900/50 transition-all active:scale-95"
             title="Clear fretboard"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -461,10 +491,10 @@ export const Fretboard: React.FC = () => {
           <button
             onClick={handleAddProgression}
             disabled={!detectedChord || detectedChord.notes.length === 0}
-            className={`flex items-center gap-1.5 px-3.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-[0_0_15px_-2px_rgba(245,158,11,0.4)] active:scale-95 ${
               isAddedFeedback
-                ? 'bg-emerald-500 text-slate-950'
-                : 'bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-30'
+                ? 'bg-emerald-400 text-slate-950 shadow-[0_0_15px_-2px_rgba(52,211,153,0.5)]'
+                : 'bg-amber-400 hover:bg-amber-300 text-slate-950 disabled:opacity-30'
             }`}
           >
             {isAddedFeedback ? (
